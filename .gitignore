@@ -2,3 +2,5 @@
 cmake-build-debug/*
 build/*
 .env
+
+.DS_Store
