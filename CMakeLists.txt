@@ -10,7 +10,7 @@ message(STATUS "Fetching dotenv-cpp...")
 FetchContent_Declare(
         dotenv-cpp
         GIT_REPOSITORY https://github.com/laserpants/dotenv-cpp.git
-        GIT_TAG master
+        GIT_TAG ee688ac80b1773c7ecc8a7e7cc545ac58d0ec20a #git hash
 )
 FetchContent_MakeAvailable(dotenv-cpp)
 
