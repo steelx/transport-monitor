@@ -11,7 +11,7 @@ using tcp = boost::asio::ip::tcp;
 using error_code = boost::system::error_code;
 namespace websocket = boost::beast::websocket;
 
-void Log(const std::string& where, error_code ec)
+void Log(const std::string& where, const error_code &ec)
 {
     std::cerr << "[" << std::setw(20) << where << "] "
               << (ec ? "Error: " : "OK")
@@ -60,7 +60,7 @@ int main() {
     // perform WebSocket handshake
     websocket::stream<tcp::socket> ws {std::move(socket)};
 
-    auto OnReceiveMessage = [](const error_code& err, boost::beast::flat_buffer receive_buffer) {
+    auto OnReceiveMessage = [](const error_code& err, const boost::beast::flat_buffer& receive_buffer) {
         if (err) {
             Log("OnReceiveMessage", err);
             return;
@@ -72,9 +72,9 @@ int main() {
 
     };
 
-    auto OnSendMessage = [&ws, &OnReceiveMessage](const error_code& ec, std::size_t bytes_written) {
-        if (ec) {
-            Log("OnSendMessage", ec);
+    auto OnSendMessage = [&ws, &OnReceiveMessage](const error_code& send_message_ec, const std::size_t bytes_written) {
+        if (send_message_ec) {
+            Log("OnSendMessage", send_message_ec);
             return;
         }
 
