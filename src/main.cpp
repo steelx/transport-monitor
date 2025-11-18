@@ -7,6 +7,10 @@
 #include <iostream>
 #include <filesystem>
 
+#include "WebSocketClient.h"
+
+using TransportProject::WebsocketClient;
+
 using tcp = boost::asio::ip::tcp;
 using error_code = boost::system::error_code;
 namespace websocket = boost::beast::websocket;
@@ -33,78 +37,66 @@ int main() {
 
     const std::string url {url_env};
     const std::string port {port_env};
-    const std::string message {"Hello, Socket!"};
+    const std::string endpoint {"/echo"};
+    const std::string message {"Hello, WebSocket!"};
 
     std::cout << "[ Main Thread : " << std::setw(14) << std::this_thread::get_id() << " ]" << std::endl;
 
     boost::asio::io_context io_context {};
 
-    tcp::socket socket {boost::asio::make_strand(io_context)};
+    // Always start with an I/O context object.
+    boost::asio::io_context ioc {};
 
-    boost::system::error_code ec {};
+    // The class under test
+    WebsocketClient client {url, endpoint, port, ioc};
 
-    tcp::resolver resolver {io_context};
-    const auto endpoints {resolver.resolve(url, port, ec)};
+    // We use these flags to check that the connection, send, receive functions
+    // work as expected.
+    bool connected {false};
+    bool messageSent {false};
+    bool messageReceived {false};
+    bool messageMatches {false};
+    bool disconnected {false};
 
-    if (ec) {
-        Log("resolver", ec);
-        return -1;
+    // Our own callbacks
+    auto onSend = [&messageSent](auto ec) {
+        messageSent = !ec;
+    };
+    auto onConnect = [&client, &connected, &onSend, &message](auto ec) {
+        connected = !ec;
+        if (!ec) {
+            client.Send(message, onSend);
+        }
+    };
+    auto onClose = [&disconnected](auto ec) {
+        disconnected = !ec;
+    };
+    auto onReceive = [&client, &onClose, &messageReceived, &messageMatches, &message](auto ec, const auto& received) {
+        messageReceived = !ec;
+        messageMatches = message == received;
+        client.Close(onClose);
+    };
+    auto onDisconnect = [&disconnected](auto ec) {
+        disconnected = !ec;
+    };
+
+    // We must call io_context::run for asynchronous callbacks to run.
+    client.Connect(onConnect, onReceive, onDisconnect);
+    ioc.run();
+
+    // When we get here, the io_context::run function has run out of work to do.
+    bool ok {
+        connected &&
+        messageSent &&
+        messageReceived &&
+        messageMatches &&
+        disconnected
+    };
+    if (ok) {
+        std::cout << "Websocket Work done." << std::endl;
+        return 0;
+    } else {
+        std::cerr << "Test failed" << std::endl;
+        return 1;
     }
-
-    socket.connect(*endpoints.begin(), ec);
-    if (ec) {
-        Log("socket.connect", ec);
-        return -1;
-    }
-
-    // perform WebSocket handshake
-    websocket::stream<tcp::socket> ws {std::move(socket)};
-
-    auto OnReceiveMessage = [](const error_code& err, const boost::beast::flat_buffer& receive_buffer) {
-        if (err) {
-            Log("OnReceiveMessage", err);
-            return;
-        }
-
-        std::cout << "Received echoed message: "
-            << boost::beast::make_printable(receive_buffer.data())
-            << std::endl;
-
-    };
-
-    auto OnSendMessage = [&ws, &OnReceiveMessage](const error_code& send_message_ec, const std::size_t bytes_written) {
-        if (send_message_ec) {
-            Log("OnSendMessage", send_message_ec);
-            return;
-        }
-
-        std::cout << "Message sent successfully (" << bytes_written << " bytes)" << std::endl;
-
-        // Read the echoed message back.
-        auto receive_buffer = std::make_shared<boost::beast::flat_buffer>();
-        ws.async_read(*receive_buffer, [receive_buffer, OnReceiveMessage](const error_code& ec, std::size_t bytes_read) {
-            OnReceiveMessage(ec,*receive_buffer);
-        });
-    };
-
-    auto OnHandshake = [&ws, &message, &OnSendMessage, &url, &port](const error_code& ec_handshake) {
-        if (ec_handshake) {
-            Log("OnHandshake", ec_handshake);
-            return;
-        }
-
-        std::cout << "WebSocket Sending message to: " << url <<":" << port << std::endl;
-
-        const boost::asio::const_buffer send_buffer {message.c_str(), message.size()};
-        ws.async_write(send_buffer, OnSendMessage);
-    };
-
-    // 1. handshake request is sent asynchronously
-    // 2. when handshake response is received, we send a Hello message asynchronously
-    // 3. when echoed message is received, we print it to console
-    // capture ws by reference, not by value
-    ws.async_handshake(url, "/echo", OnHandshake);
-
-    io_context.run();
-    return 0;
 }

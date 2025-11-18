@@ -37,7 +37,9 @@ FetchContent_MakeAvailable(Boost)
 # Copy .env file to the build directory so the executable can find it
 configure_file(${CMAKE_SOURCE_DIR}/.env ${CMAKE_BINARY_DIR}/.env COPYONLY)
 
-add_executable(TransportProject src/main.cpp)
+add_executable(TransportProject src/main.cpp
+        src/WebsocketClient.cpp
+)
 
 
 # --- Link requires dependencies here ---
